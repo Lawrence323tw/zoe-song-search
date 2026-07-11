@@ -151,7 +151,7 @@
       <input
         type="search"
         id="searchSinger"
-        placeholder="請輸入歌手"
+        placeholder="請輸入歌手（英文至少2字）"
         autocomplete="off"
         enterkeyhint="search"
         aria-label="歌手"
@@ -163,7 +163,7 @@
       <input
         type="search"
         id="searchSong"
-        placeholder="請輸入歌名"
+        placeholder="請輸入歌名（英文至少2字）"
         autocomplete="off"
         enterkeyhint="search"
         aria-label="歌名"
@@ -193,6 +193,8 @@
     // 如果之後這頁也搬到 Cloudflare Pages，可以改成空字串：''。
     const API_BASE_URL = 'https://zuo-karaoke-archive.pages.dev';
     const SUGGEST_LIMIT = 10;
+    const MIN_LATIN_KEYWORD_LENGTH = 2;
+    const MIN_TEXT_KEYWORD_LENGTH = 1;
 
     let searchRequestId = 0;
     const suggestTimers = {
@@ -247,6 +249,32 @@
       status.className = isError ? 'status error' : 'status';
     }
 
+    function isCjkLikeKeyword(value) {
+      return /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff\uac00-\ud7af]/.test(value);
+    }
+
+    function compactKeyword(value) {
+      return toHalfWidth(value).replace(/\s+/g, '');
+    }
+
+    function isKeywordTooShort(value) {
+      const compact = compactKeyword(value);
+
+      if (!compact) {
+        return false;
+      }
+
+      const minLength = isCjkLikeKeyword(compact)
+        ? MIN_TEXT_KEYWORD_LENGTH
+        : MIN_LATIN_KEYWORD_LENGTH;
+
+      return compact.length < minLength;
+    }
+
+    function keywordLengthMessage() {
+      return `英文 / 數字請至少輸入 ${MIN_LATIN_KEYWORD_LENGTH} 個字；中文 / 日文至少輸入 ${MIN_TEXT_KEYWORD_LENGTH} 個字。`;
+    }
+
     function queueSuggest(type) {
       clearTimeout(suggestTimers[type]);
       suggestTimers[type] = setTimeout(() => loadSuggestions(type), 180);
@@ -260,7 +288,7 @@
       suggestRequestIds[type] += 1;
       const requestId = suggestRequestIds[type];
 
-      if (!keyword) {
+      if (!keyword || isKeywordTooShort(keyword)) {
         renderSuggestions(type, []);
         return;
       }
@@ -330,6 +358,12 @@
       if (!singerKeyword && !songKeyword) {
         elements.table.style.display = 'none';
         setStatus('請輸入歌手或歌名後按搜尋。');
+        return;
+      }
+
+      if (isKeywordTooShort(singerKeyword) || isKeywordTooShort(songKeyword)) {
+        elements.table.style.display = 'none';
+        setStatus(keywordLengthMessage(), true);
         return;
       }
 
